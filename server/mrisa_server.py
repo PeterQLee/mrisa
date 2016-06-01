@@ -42,10 +42,16 @@ def google_image_results_parser(code):
                    'description':[],
                    'title':[],
                    'result_qty':[]}
-
+    f=open("fd.html","w")
+    f.write(str(code))
+    #print(soup)
     # Links for all the search results
-    for li in soup.findAll('li', attrs={'class':'g'}):
+    #print(soup.findAll('li'))
+    for li in soup.findAll('div', attrs={'class':'rc'}):
         sLink = li.find('a')
+        print(li)
+
+
         whole_array['links'].append(sLink['href'])
 
     # Search Result Description

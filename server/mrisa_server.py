@@ -2,6 +2,7 @@ import pycurl, json
 from flask import Flask, url_for, json, request
 from StringIO import StringIO
 from bs4 import BeautifulSoup
+from time import sleep
 
 app = Flask(__name__)
 
@@ -14,7 +15,7 @@ def mrisa_main():
         client_json = json.dumps(request.json)
         client_data = json.loads(client_json)
         code = retrieve(client_data['image_url'])
-        return google_image_results_parser(code)
+        return build_json_return(google_image_results_parser(code),0)
         #return "JSON Message: " + json.dumps(request.json)
     else:
         json_error_message = "Requests need to be in json format. Please make sure the header is 'application/json' and the json is valid."
@@ -34,7 +35,10 @@ def retrieve(image_url):
     return returned_code.getvalue()
 
 # Parses returned code (html,js,css) and assigns to array using beautifulsoup
-def google_image_results_parser(code):
+def google_image_results_parser(code,n):
+    SLEEPAMOUNT=15
+    LIMIT=4 #how many limits of recursion to do
+
     soup = BeautifulSoup(code)
 
     # initialize 2d array
@@ -44,12 +48,17 @@ def google_image_results_parser(code):
                    'result_qty':[]}
     f=open("fd.html","w")
     f.write(str(code))
-    #print(soup)
+
     # Links for all the search results
-    #print(soup.findAll('li'))
+
+    nextlink=None
+    for next in soup.findAll('a',attrs={'id':'pnnext','class':'pn'}):
+        nextlink=next.get('href')
+
+
     for li in soup.findAll('div', attrs={'class':'rc'}):
         sLink = li.find('a')
-        print(li)
+        #print(li)
 
 
         whole_array['links'].append(sLink['href'])
@@ -66,7 +75,28 @@ def google_image_results_parser(code):
     for result_qty in soup.findAll('div', attrs={'id':'resultStats'}):
         whole_array['result_qty'].append(result_qty.get_text())
 
-    return build_json_return(whole_array)
+    
+    if nextlink and n < LIMIT:
+        #go to the NEXT link given
+        sleep(SLEEPAMOUNT)
+
+        returned_code = StringIO()
+        full_url = 'https://www.google.com' +nextlink
+
+        conn = pycurl.Curl()
+        conn.setopt(conn.URL, str(full_url))
+        conn.setopt(conn.FOLLOWLOCATION, 1)
+        conn.setopt(conn.USERAGENT, 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.97 Safari/537.11')
+        conn.setopt(conn.WRITEFUNCTION, returned_code.write)
+        conn.perform()
+        conn.close()
+
+        rest= google_image_results_parser(returned_code.getvalue(),n+1)
+        #concatenate dictionaries
+        for i in whole_array:
+            whole_array[i]+=rest[i]
+    
+    return whole_array
 
 def build_json_return(whole_array):
     return json.dumps(whole_array)
